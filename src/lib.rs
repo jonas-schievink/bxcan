@@ -408,6 +408,26 @@ where
         can.msr.write(|w| w.wkui().set_bit());
     }
 
+    /// Clears the "Request Completed" (RQCP) flag of a transmit mailbox.
+    ///
+    /// Returns the [`Mailbox`] whose flag was cleared. If no mailbox has the flag set, returns
+    /// `None`.
+    ///
+    /// Once this function returns `None`, a pending [`Interrupt::TransmitMailboxEmpty`] is
+    /// considered acknowledged.
+    pub fn clear_request_completed_flag(&mut self) -> Option<Mailbox> {
+        let can = self.registers();
+        todo!()
+    }
+
+    /// Clears a pending TX interrupt ([`Interrupt::TransmitMailboxEmpty`]).
+    ///
+    /// This does not return the mailboxes that have finished tranmission. If you need that
+    /// information, call [`clear_request_completed_flag`] instead.
+    pub fn clear_tx_interrupt(&mut self) {
+        while self.clear_request_completed_flag().is_some() {}
+    }
+
     /// Puts a CAN frame in a free transmit mailbox for transmission on the bus.
     ///
     /// Frames are transmitted to the bus based on their priority (identifier).

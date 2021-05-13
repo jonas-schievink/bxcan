@@ -7,6 +7,9 @@
 
 #![no_std]
 
+pub mod interrupt;
+
+use cortex_m::peripheral::NVIC;
 use defmt_rtt as _;
 use panic_probe as _;
 
@@ -38,6 +41,14 @@ unsafe impl Instance for CAN2 {
 }
 
 fn init(p: pac::Peripherals) -> (CAN1, CAN2) {
+    // Enable CAN interrupts
+
+    unsafe {
+        NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX);
+    }
+
+    // Initialize CAN peripherals
+
     p.RCC
         .apb1enr
         .modify(|_, w| w.can1en().enabled().can2en().enabled());
