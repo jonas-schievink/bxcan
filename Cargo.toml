@@ -27,6 +27,15 @@ vcell = "0.1.2"
 nb = "1.0.0"
 embedded-can = "0.3"
 
+[features]
+# do NOT modify these features
+defmt-default = []
+defmt-trace = []
+defmt-debug = []
+defmt-info = []
+defmt-warn = []
+defmt-error = []
+
 [profile.test]
 opt-level = "s"
 lto = true

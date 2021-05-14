@@ -378,6 +378,22 @@ where
         }
     }
 
+    /// Wakes up from sleep mode.
+    pub fn wakeup(&mut self) {
+        let can = self.registers();
+        defmt::trace!("SLAK: {}", can.msr.read().slak().bit_is_set());
+        can.mcr
+            .modify(|_, w| w.sleep().clear_bit().inrq().clear_bit());
+        defmt::trace!("SLAK: {}", can.msr.read().slak().bit_is_set());
+        loop {
+            let msr = can.msr.read();
+            if msr.slak().bit_is_clear() && msr.inak().bit_is_clear() {
+                defmt::trace!("SLAK: {}", can.msr.read().slak().bit_is_set());
+                break;
+            }
+        }
+    }
+
     /// Starts listening for a CAN interrupt.
     pub fn enable_interrupt(&mut self, interrupt: Interrupt) {
         self.enable_interrupts(Interrupts::from_bits_truncate(interrupt as u32))
@@ -402,10 +418,48 @@ where
             .modify(|r, w| unsafe { w.bits(r.bits() & !interrupts.bits()) })
     }
 
+    /// Clears the pending flag of [`Interrupt::Sleep`].
+    pub fn clear_sleep_interrupt(&mut self) {
+        let can = self.registers();
+        can.msr.write(|w| w.slaki().set_bit());
+    }
+
     /// Clears the pending flag of [`Interrupt::Wakeup`].
     pub fn clear_wakeup_interrupt(&mut self) {
         let can = self.registers();
         can.msr.write(|w| w.wkui().set_bit());
+    }
+
+    /// Clears the "Request Completed" (RQCP) flag of a transmit mailbox.
+    ///
+    /// Returns the [`Mailbox`] whose flag was cleared. If no mailbox has the flag set, returns
+    /// `None`.
+    ///
+    /// Once this function returns `None`, a pending [`Interrupt::TransmitMailboxEmpty`] is
+    /// considered acknowledged.
+    pub fn clear_request_completed_flag(&mut self) -> Option<Mailbox> {
+        let can = self.registers();
+        let tsr = can.tsr.read();
+        if tsr.rqcp0().bit_is_set() {
+            can.tsr.modify(|_, w| w.rqcp0().set_bit());
+            Some(Mailbox::Mailbox0)
+        } else if tsr.rqcp1().bit_is_set() {
+            can.tsr.modify(|_, w| w.rqcp1().set_bit());
+            Some(Mailbox::Mailbox1)
+        } else if tsr.rqcp2().bit_is_set() {
+            can.tsr.modify(|_, w| w.rqcp2().set_bit());
+            Some(Mailbox::Mailbox2)
+        } else {
+            None
+        }
+    }
+
+    /// Clears a pending TX interrupt ([`Interrupt::TransmitMailboxEmpty`]).
+    ///
+    /// This does not return the mailboxes that have finished tranmission. If you need that
+    /// information, call [`Can::clear_request_completed_flag`] instead.
+    pub fn clear_tx_interrupt(&mut self) {
+        while self.clear_request_completed_flag().is_some() {}
     }
 
     /// Puts a CAN frame in a free transmit mailbox for transmission on the bus.
@@ -800,7 +854,7 @@ where
 }
 
 /// The three transmit mailboxes
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Format)]
 pub enum Mailbox {
     /// Transmit mailbox 0
     Mailbox0 = 0,
